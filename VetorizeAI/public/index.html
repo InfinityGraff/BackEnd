@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Vectorizer.ai | Editor de Paleta</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link  href="https://raw.githack.com/InfinityGraff/MyBiblioteca/main/CSSBiblioteca.css" rel="stylesheet">
+    <script src="https://raw.githack.com/InfinityGraff/MyBiblioteca/main/PreScript.js"></script>
+</head>
+
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {font-family: 'Inter', sans-serif;background: #0a0a0b; color: #e0e0e0;min-height: 100vh; display: flex; align-items: center; justify-content: center;padding: 20px}
+    .container { width: 100%; max-width: 1100px; background: #141416; border: 1px solid #242429; border-radius: 20px; padding: 28px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .header { text-align: center; margin-bottom: 24px; }
+    h1 { font-size: 1.5rem; color: #fff; }
+    .sub { font-size: 0.9rem; color: #9ca3af; }
+
+    .drop-zone { border: 2px dashed #2a2a2e; border-radius: 14px; padding: 40px; text-align: center; cursor: pointer; background: #0e0e11; margin-bottom: 20px; transition: 0.2s; }
+    .drop-zone:hover { border-color: #7B2FF7; }
+    .drop-zone.dragover { border-color: #7B2FF7; background: #1a102b; }
+    .drop-zone.file-selected { border-style: solid; padding: 20px; }
+
+    .btn-primary { width: 100%; padding: 14px; font-weight: 600; border: none; border-radius: 12px; background: linear-gradient(135deg, #7B2FF7, #9333ea); color: #fff; cursor: pointer; transition: 0.2s; }
+    .btn-primary:disabled { background: #2a2a2e; color: #5a5a62; cursor: not-allowed; }
+
+    .status { margin: 12px 0; font-size: 0.85rem; }
+    .status.loading {color:#fbbf24}.status.success{color:#4ade80}.status.error{color:#f87171}
+
+    .workspace { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+    .preview-panel, .palette-panel { flex: 1 1 350px; background: #0e0e11; border: 1px solid #242429; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; }
+    .mode-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+    .mode-tab { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; background: #242429; color: #b0b0b0; border: none; cursor: pointer; }
+    .mode-tab.active { background: #7B2FF7; color: #fff; }
+    .canvas-wrap { flex:1; display:flex; align-items:center; justify-content:center; background:#1a1a1e; border-radius:8px; overflow:hidden; position: relative; }
+    canvas { max-width:100%; max-height:100%; }
+    .preview-note { position: absolute; bottom: 4px; right: 8px; font-size: 0.65rem; color: #6b6b75; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; }
+
+    .zoom-controls { display: flex; gap: 8px; margin-top: 10px; justify-content: center; }
+    .zoom-btn { background: #242429; border: none; color: #b0b0b0; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; }
+    .zoom-btn:hover { background: #7B2FF7; color: #fff; }
+
+    .stats { font-size:0.8rem; color:#b0b0b0; margin-bottom:8px; }
+
+    .toolbar            { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+        .toolbar button { background:#242429; border:none; color:#b0b0b0; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.8rem; transition:0.2s; }
+        .toolbar button:hover:not(:disabled) { background:#7B2FF7; color:#fff; }
+        .toolbar button:disabled             { opacity:0.4; cursor:not-allowed; }
+    .color-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(32px,1fr)); gap:6px; flex:1; overflow-y:auto; align-content:start; }
+    .color-chip { aspect-ratio:1/1; border-radius:50%; border:2px solid transparent; cursor:pointer; transition:0.15s; position:relative; }
+    .color-chip:hover { transform:scale(1.2); z-index:2; }
+    .color-chip.selected { border-color:#fff; box-shadow:0 0 0 3px #7B2FF7; }
+    .color-chip.locked { border-color: #fbbf24; }
+    .chip-label { position:absolute; bottom:-14px; left:50%; transform:translateX(-50%); font-size:8px; color:#b0b0b0; white-space:nowrap; }
+    .lock-icon { position:absolute; top:2px; right:2px; font-size:10px; }
+
+    .btn-download { display:inline-flex; align-items:center; gap:8px; margin-top:12px; padding:10px 18px; background:#242429; color:#d0d0d0; border:1px solid #34343a; border-radius:10px; cursor:pointer; text-decoration:none; }
+    .btn-download:hover { background:#2e2e36; border-color:#7B2FF7; }
+
+    .modal-grid {display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
+</style>
+
+<script> // Defaults
+    const CONFIG = {
+        BACKEND_BASE_URL: 'http://localhost:8080/api/vectorizer',
+        DEFAULT_MAX_COLORS: 32,     // Número de cores padrão extraídas da imagem na primeira vetorização.
+        PRESETS: [2,4,6,8,12,16,20,24,32,48,64,96,128], //Opções rápidas de quantidade de cores exibidas como botões na paleta.
+        MAX_PREVIEW_ZOOM: 4,        // Zoom máximo permitido no canvas de preview (4× = 400%)
+        MIN_PREVIEW_ZOOM: 0.25,     // Zoom mínimo permitido no canvas de preview (0.25× = 25%)
+        MAX_HISTORY: 50,            // Tamanho máximo do histórico de Undo/Redo
+        PREVIEW_REDUCTION_SIZE: 800 // Dimensão máxima (em pixels) para o preview reduzido.
+    }
+    const defaultDownloadOptions = { // Todos os valores aqui são os defaults escolhidos para o usuário.
+        fileFormat: 'svg',        // Formato do arquivo de saída. Valores: svg | pdf | eps | dxf | png */
+        drawStyle: 'fill_shapes', // Estilo de renderização dos vetores. Valores válidos (doc): fill_shapes | stroke_shapes | stroke_edges
+        shapeStacking: 'cutouts', // Comportamento de sobreposição de formas. Valores: stacked | cutouts
+        groupBy: 'color',         // Agrupamento dos elementos no arquivo de saída. Valores: none | color | parent | layer
+        svgVersion: 'svg_1_1',    // Versão do padrão SVG. Valores: svg_1_1 | svg_2_0 */
+        svgFixedSize: false,      // true = largura/altura fixas em px; false = viewBox responsivo */
+        svgAdobeCompatibilityMode: false, // Ativa compatibilidade com Adobe Illustrator */
+        flattenParameterizedShapes: false, // Se true, formas parametrizadas (círculos, retângulos) são convertidas para paths genéricos antes de exportar.
+        allowedCurves: {quadraticBezier: true,cubicBezier:     true,circularArc:     true,ellipticalArc:   true}, // Tipos de curva Bézier permitidos na saída
+        lineFitTolerance: 0.1, // Tolerância de ajuste linha vs curva. Intervalo válido: 0.001 – 1.0 (float). Menor = mais fiel ao original; maior = paths mais simples. Default da API: 0.1
+        gapFiller:  {enabled:          true,clip:            false,nonScalingStroke:true,strokeWidth:    2}, // Preenchedor de lacunas entre formas adjacentes. Evita bordas brancas visíveis entre regiões de cor.
+        strokeStyle:{nonScalingStroke: true,useOverrideColor:false,overrideColor:'#000000',strokeWidth:1}, /** Estilo de traços (usado quando drawStyle usa stroke_shapes ou stroke_edges) */
+        dxfCompatibilityLevel: 'lines_arcs_and_splines' // compatibilidade do arquivo DXF
+    }
+    let DwldOpt = structuredClone(defaultDownloadOptions); // DownloadOptions declarado APÓS os imports para que defaultDownloadOptions já esteja disponível. structuredClone garante cópia profunda independente.
+    let arquivoSelecionado = null // Arquivo de imagem selecionado pelo usuário (File object).
+
+    const MAX_PIXELS= 100_000 // Limite de pixels amostrados para manter performance
+    let paleta      = []   // array de { id, hex, rgb, pixels, percentage, locked }
+    let remaps      = []   // array de { source, target, tolerance, active }
+    let Hist        = []   // snapshots do estado para Undo/Redo
+    let HistIdx     = -1
+    let SlctColr    = new Set()
+    let maxColors   = CONFIG.DEFAULT_MAX_COLORS
+    let ImgOrgn     = null
+    let ImgTkn      = null
+    let CurrBlod    = null  // URL do blob atual (revogada ao criar nova)
+    let previewData = null  // ImageData reduzido para preview rápido
+    let refreshGuard= false // Proteção contra reentrada no refreshAll()
+    let modoPreview = 'original'
+    let zoom        = 1
+</script>
+
+<script> // Biblioteca
+    function setStatus(Msg,Class) {const el=$('#status'); el.textContent = Msg; el.className=`status ${Class}`} // Atualiza o elemento de status com mensagem.
+    const Tm_Opt2=(j,Slt)=>ObjEtr(j).map(([k,v])=>`<option value="${k}" ${Slt==k?'selected':''}>${v}</option>`).join('')
+    function getImageToken()   {return ImgTkn} // Retorna o imageToken atual (para Re-Vetorização)
+    function setImageToken(tkn){ImgTkn = tkn ; if(tkn){localStorage.setItem('VETOR.img',tkn)}else{localStorage.removeItem('VETOR.img')}} // Define o imageToken e persiste no localStorage. Quando null, remove do localStorage.
+    // Restaura Storages
+    const savedToken = localStorage.getItem('VETOR.img')  ; if(savedToken){setImageToken(savedToken)}
+    const StoreDwld  = localStorage.getItem('VETOR.Dwld') ; if(StoreDwld){try{DwldOpt=JSON.parse(StoreDwld)}catch(e){console.warn('Erro:',e)}}
+
+    // Helper PalletEditor
+    function hexToRgb(h){const c = h.replace('#', ''); const full = c.length === 3 ? c.split('').map(x => x + x).join('') : c; const n = parseInt(full, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];} // Converte uma string HEX para array RGB.
+    function rgbToHex(r,g,b) {return '#' + [r, g, b].map(n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('').toUpperCase();}// Converte valores RGB individuais para string HEX maiúscula.
+    function colorDist(a,b)  {return Math.sqrt(a.reduce((sum, _, i) => sum + Math.pow(a[i] - b[i], 2), 0));}// Calcula a distância euclidiana entre duas cores no espaço RGB.
+    function isValidPaletteLine(line) { // Valida se uma linha está no formato aceito pelo parâmetro
+        const trimmed = line.trim();
+        if (/^#[0-9a-fA-F]{6};$/.test(trimmed)) return true; /* Cor simples */    
+        if (/^#[0-9a-fA-F]{6}\s*->\s*#[0-9a-fA-F]{6}\s*~\s*\d+(\.\d+)?;$/.test(trimmed)) return true; /* Remapeamento com tolerância */
+        return false;
+    }
+    function buildPaletteString(paleta, remaps) { // Constrói a string de paleta no formato esperado pelo parâmetro
+        const lines = [];
+        const remappedSources = new Set(remaps.filter(r => r.active).map(r => r.source));
+        remaps.filter(r => r.active).forEach(r => {lines.push(`${r.source} -> ${r.target} ~ ${r.tolerance.toFixed(2)};`);}); /* Adiciona as regras de remapeamento ativas */
+        paleta.forEach(c => {if (!remappedSources.has(c.hex)) {lines.push(c.hex + ';');}}); /* Adiciona cores que não são origem de nenhuma regra ativa */
+        return lines.filter(isValidPaletteLine).join('\n');
+    }
+    // ── Helpers locais ────────────────────────────────────────────────────────────
+    function loadImage(file) { // Carrega um File como HTMLImageElement de forma assíncrona.
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img  = new Image();
+                img.onload  = () => resolve(img);
+                img.onerror = reject;
+                img.src     = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+</script>
+
+<body>
+    <div class="container">
+        <div class="header"><h1>Vetorize</h1><p class="sub">Crie Vetores com IA da Infinity</p></div>
+
+        <div class="drop-zone" id="dropArea">
+            <p>Arraste uma imagem ou <strong>clique para selecionar</strong></p>
+            <p style="font-size:0.78rem;color:#6b6b75;">JPG ou PNG</p>
+            <input type="file" id="inputImagem" accept="image/png, image/jpeg" style="display:none">
+        </div>
+        <button class="btn-primary" id="btnVetorizar" onclick="VVetorizar(this)" disabled>Vetorizar</button>
+        <div class="status" id="status"></div>
+
+        <div class="workspace" id="workspace" style="display:none;">
+            <div class="preview-panel">
+                <div class="mode-tabs">
+                    <button class="mode-tab active" data-mode="original">Original</button>
+                    <button class="mode-tab" data-mode="output" title="Simulação local – o resultado vetorial pode ser diferente">Pré‑visualização</button>
+                </div>
+                <div class="canvas-wrap"><canvas id="previewCanvas" width="400" height="400"></canvas></div>
+                <div class="zoom-controls">
+                    <button class="zoom-btn" onclick="zoomIn()">+</button>
+                    <button class="zoom-btn" onclick="zoomOut()">−</button>
+                    <button class="zoom-btn" onclick="zoomReset()">1:1</button>
+                </div>
+            </div>
+
+            <div class="palette-panel">
+                <div class="stats" id="stats">0 cores</div>
+                <div class="toolbar">
+                    <button id="btnUndo"  onclick="undo()          " disabled>↩</button>
+                    <button id="btnRedo"  onclick="redo()          " disabled>↪</button>
+                    <button id="btnMerge" onclick="mergeSelected() " disabled>Mesclar</button>
+                    <button id="btnLock"  onclick="lockSelected()  " disabled>🔒</button>
+                    <button class="none"  onclick="groupSimilar()  " >Agrupar</button>
+                    <button               onclick="clearSelection()" >Limpar </button>
+                </div>
+                <div class="presets-row" id="presetsRow"></div>
+                <div class="color-grid"  id="colorGrid" ></div>
+                <button class="btn-primary" onclick="ReVetor()">Re-Vetorizar</button>
+            </div>
+        </div>
+
+        <div class="Ct gap" onchange="Store_Dwld()">
+            <div class="Cl"><label>Saída             </label> <select id="Dw_Saida" onload="Inn(this,Tm_Opt2({svg:'SVG',pdf:'PDF',eps:'EPS',dxf:'DXF',png:'PNG'                         },DwldOpt.fileFormat   ||'svg'        ))"></select></div>
+            <div class="Cl"><label>Agrupamento       </label> <select id="Dw_Group" onload="Inn(this,Tm_Opt2({none:'Nenhum',color:'Por Cor',parent:'Por Pai',layer:'Por Camada'         },DwldOpt.groupBy      ||'color'      ))"></select></div>   
+            <div class="Cl"><label>Empilhamento      </label> <select id="Dw_Shape" onload="Inn(this,Tm_Opt2({cutouts:'Recorte',stacked:'Empilhado'                                     },DwldOpt.shapeStacking||'cutouts'    ))"></select></div>
+            <div class="Cl"><label>Estilo de Desenho </label> <select id="Dw_DrawS" onload="Inn(this,Tm_Opt2({fill_shapes:'Preenchimento',stroke_shapes:'Contorno',stroke_edges:'Bordas'},DwldOpt.drawStyle    ||'fill_shapes'))"></select></div>
+            <div class="Cl none"><label class="Ct"><input type="checkbox" id="Dw_Adobe" onload="this.checked = !!DwldOpt.svgAdobeCompatibilityMode"> Adobe </label></div>
+        </div>
+        <script>
+            function Store_Dwld(){ // Salva DwldOpt no localStorage
+                DwldOpt.fileFormat    = $('#Dw_Saida').value
+                DwldOpt.groupBy       = $('#Dw_Group').value
+                DwldOpt.shapeStacking = $('#Dw_Shape').value
+                DwldOpt.drawStyle     = $('#Dw_DrawS').value
+                DwldOpt.svgAdobeCompatibilityMode = $('#Dw_Adobe').checked
+                localStorage.setItem('VETOR.Dwld',JSON.stringify(DwldOpt))
+            }
+        </script>
+        <div class="result-section" id="resultSection" style="display:none; margin-top:20px"><a class="btn-download" id="btnDownload" download="vetorizado.svg">⬇️ Baixar SVG Final</a></div>
+    </div>
+</body>
+
+<script>Onloads('body')</script>
+
+<script> // API Vetorize.AI
+    async function buildError(response) { // Lê o corpo do erro retornado pelo backend e constrói um Error legível.
+        try{const json = await response.json();
+            // Monta a mensagem priorizando o detalhe da API externa, depois a mensagem do backend, e por último um fallback genérico.
+            const msg = json.detail || json.message || json.error || 'Erro desconhecido';
+            return new Error(`[${response.status}] ${msg}`);
+        } catch {return new Error(`Erro HTTP ${response.status}`)} /* Corpo não é JSON (ex: erro de proxy/rede) */
+    }
+
+    function extractFileName(response) { // Extrai o nome do arquivo sugerido para download.
+        const xFileName = response.headers.get('X-File-Name'); /* Atalho: backend envia X-File-Name para evitar parsear Content-Disposition */
+        if (xFileName) return xFileName;   
+        const disposition = response.headers.get('Content-Disposition'); /* Fallback: Content-Disposition padrão */
+        if (!disposition) return 'result.svg';
+        const match = disposition.match(/filename="?([^"]+)"?/i);
+        return match ? match[1] : 'result.svg';
+    }
+
+    async function vectorize(file, maxColors) { // Envia uma imagem para vetorização via backend.
+        const form = new FormData();
+        form.append('image', file);
+        form.append('maxColors', maxColors);
+        const response = await fetch(`${CONFIG.BACKEND_BASE_URL}/vectorize`,{method:'POST',body:form})
+        if (!response.ok) {throw await buildError(response)}
+        return {        
+            fileBlob: await response.blob(), // Blob do arquivo vetorizado (SVG, PDF, EPS, DXF ou PNG)
+            imageToken: response.headers.get('X-Image-Token'), // Token para re-vetorização futura. Presente apenas quando o backend foi configurado com retention-days >= 1. Null quando retention-days=0.
+            contentType: response.headers.get('X-Content-Type') || response.headers.get('Content-Type'), // Tipo MIME limpo do arquivo retornado
+            fileName: extractFileName(response) // Nome sugerido para o arquivo de download
+        }
+    }
+
+    async function revectorize(imageToken, palette, options) { // Re-vetoriza uma imagem já retida no backend com nova paleta e/ou opções.
+        const response = await fetch(`${CONFIG.BACKEND_BASE_URL}/revectorize`,{method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ imageToken, palette, options })});
+        if (!response.ok) {throw await buildError(response);}
+        return {fileBlob:    await response.blob(),
+                contentType: response.headers.get('X-Content-Type') || response.headers.get('Content-Type'),
+                fileName:    extractFileName(response)
+        }
+    }
+</script>
+
+<script> // Median-Cut - Extrator de paleta de cores usando o algoritmo Median Cut. Dado uma imagem HTML e o número de cores desejado, retorna as N
+    function averageBucket(bucket) { // Calcula a cor média de um grupo de pixels.
+        let r = 0, g = 0, b = 0;
+        for (const p of bucket) {r += p[0];g += p[1];b += p[2];}
+        return {rgb: [Math.round(r / bucket.length),Math.round(g / bucket.length),Math.round(b / bucket.length)],count: bucket.length};
+    }
+
+    function medianCut(bucket, depth) { // Divide recursivamente o bucket pelo canal de maior variação. Divide recursivamente o bucket pelo canal de maior variação.
+        if (!bucket.length) return [];
+        if (depth <= 0 || bucket.length <= 1) {return [averageBucket(bucket)];} // Caso base: profundidade zero ou bucket com 1 pixel
+        // Encontra o canal com maior variação (range)
+        let bestChannel = 0;
+        let bestRange   = -1;
+        for (let ch = 0; ch < 3; ch++) {
+            let min = 255, max = 0;
+            for (const pixel of bucket) {
+                if (pixel[ch] < min) min = pixel[ch];
+                if (pixel[ch] > max) max = pixel[ch];
+            }
+            if (max - min > bestRange) {bestRange   = max - min; bestChannel = ch;}
+        }
+        bucket.sort((a, b) => a[bestChannel] - b[bestChannel]); /* Ordena pelo canal escolhido e corta na mediana */
+        const middle = Math.floor(bucket.length / 2);    
+        if (middle <= 0 || middle >= bucket.length) {return [averageBucket(bucket)];} /* Guard: evita divisão degenerada */
+        return [...medianCut(bucket.slice(0, middle), depth - 1),...medianCut(bucket.slice(middle),    depth - 1)];
+    }
+
+    function extractPalette(img, count) { // Extrai a paleta de cores de uma imagem usando Median Cut. //Redimensiona proporcionalmente para no máximo mAX_PIXELS, mantendo a representatividade da paleta sem travar o browser.
+        const scale  = Math.min(1, Math.sqrt(MAX_PIXELS / (img.width * img.height)));
+        const width  = Math.max(1, Math.round(img.width  * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height).data;
+        const pixels = []; // Coleta pixels ignorando canal alpha (só RGB)
+        for (let i = 0; i < imageData.length; i += 4) {pixels.push([imageData[i], imageData[i + 1], imageData[i + 2]]);}
+        if (!pixels.length) return [];
+
+        // Profundidade da recursão = ceil(log2(count)). Exemplo: count=32 → depth=5 → até 2^5=32 clusters.
+        const depth    = Math.ceil(Math.log2(Math.max(2, count)));
+        const clusters = medianCut(pixels, depth);
+        const total    = pixels.length;
+
+        return clusters.map(cluster => ({
+                id:         crypto.randomUUID(),
+                hex:        rgbToHex(...cluster.rgb),
+                rgb:        cluster.rgb,
+                pixels:     cluster.count,
+                percentage: (cluster.count / total) * 100,
+                locked:     false
+            })).sort((a,b)=>b.pixels-a.pixels).slice(0,count) // sort - mais frequente primeiro, slice - garante máximo de N cores
+    }
+</script>
+
+<script> // Editor de paleta de cores — estado e renderização.
+    const PrevCanv   = $('#previewCanvas') // Canvas de preview, inicializado uma vez ao carregar o módulo
+    const previewCtx = PrevCanv.getContext('2d')
+
+    // ── Preview reduzido ──────────────────────────────────────────────────────────
+    function createPreviewImage() { // Cria uma versão reduzida da imagem original em memória para o preview. Redimensiona para no máximo PREVIEW_REDUCTION_SIZE px no maior lado, mantendo performance mesmo em imagens grandes.
+        if (!ImgOrgn) return;
+        const maxSize = CONFIG.PREVIEW_REDUCTION_SIZE;
+        const scale   = Math.min(1, maxSize / Math.max(ImgOrgn.width, ImgOrgn.height));
+        const w = Math.round(ImgOrgn.width  * scale);
+        const h = Math.round(ImgOrgn.height * scale);
+        const cvs = document.createElement('canvas');
+        cvs.width  = w;
+        cvs.height = h;
+        cvs.getContext('2d').drawImage(ImgOrgn, 0, 0, w, h);
+        previewData = cvs.getContext('2d').getImageData(0, 0, w, h);
+    }
+
+    // ── Histórico (Undo/Redo) ─────────────────────────────────────────────────────
+        function pushHistory() { // Salva o estado atual no histórico. Se houver estados "futuros" (Redo pendente), eles são descartados. Quando o histórico excede mAX_HISTORY, o estado mais antigo é removido, e o historyIndex é corrigido para sempre apontar ao último item.
+            const snap = {paleta:paleta.map(c=>({...c})), remaps:remaps.map(r=>({...r})), maxColors}
+            if (HistIdx < Hist.length - 1) {Hist = Hist.slice(0, HistIdx + 1);} // Descarta Redo pendente ao gravar novo estado
+            Hist.push(snap)
+            if (Hist.length > CONFIG.MAX_HISTORY) {Hist.shift()} // Mantém o limite de mAX_HISTORY entradas, historyIndex é sempre atualizado em ambos os branches para, garantir que aponta ao último item após qualquer operação.
+            HistIdx = Hist.length - 1
+            updateUndoRedoButtons()
+        }       
+        function undo() {if (HistIdx <= 0              ) return;HistIdx--; restore(Hist[HistIdx])} // Desfaz a última ação, restaurando o estado anterior
+        function redo() {if (HistIdx >= Hist.length - 1) return;HistIdx++; restore(Hist[HistIdx])} // Refaz a última ação desfeita
+
+        function restore(snap) { // Aplica um snapshot de histórico ao estado atual e re-renderiza.
+            paleta    = snap.paleta.map(c=>({...c}))
+            remaps    = snap.remaps.map(r=>({...r}))
+            maxColors = snap.maxColors
+            SlctColr.clear() ; refreshAll()
+        }
+        function updateUndoRedoButtons(){$('#btnUndo').disabled = HistIdx <= 0; $('#btnRedo').disabled = HistIdx >= Hist.length - 1;} // Atualiza o estado disabled dos botões Desfazer/Refazer.
+
+    // ── Renderização ──────────────────────────────────────────────────────────────
+    function renderStats(){Inn($('#stats'),`${paleta.length} Cores`)} // Renderiza estatísticas da paleta atual (total de cores e top 3).
+    function renderPaleta() { // Renderiza a grade de chips de cor no DOM.
+        const grid = $('#colorGrid') ; grid.innerHTML = ''
+        paleta.forEach(c=>{
+            const chip = document.createElement('div')
+            chip.className = 'color-chip' + (SlctColr.has(c.id) ? ' selected' : '') + (c.locked ? ' locked' : '');
+            chip.style.backgroundColor = c.hex;
+            chip.title = `${c.hex} · ${c.percentage.toFixed(1)}%` + (c.locked ? ' (bloqueada)' : '');
+            chip.innerHTML = `<span class="chip-label">${c.percentage.toFixed(0)}%</span>` + (c.locked ? '<span class="lock-icon">🔒</span>' : '');
+
+            chip.addEventListener('click', e => { // Ctrl/Cmd = seleção múltipla; clique simples = toggle/único 
+                if (e.ctrlKey || e.metaKey) { SlctColr.has(c.id) ? SlctColr.delete(c.id) : SlctColr.add(c.id);
+                } else {if (SlctColr.size === 1 && SlctColr.has(c.id)) {SlctColr.clear();}else {SlctColr.clear(); SlctColr.add(c.id);}}
+                renderPaleta() ; updateToolbarButtons() ; renderPreview();
+            });
+            grid.appendChild(chip);
+        });
+        updateToolbarButtons();
+    }
+    function renderPreview() { // Renderiza o preview no canvas, aplicando remapeamentos localmente.
+        // original    → exibe a imagem original sem alterações
+        // output      → aplica regras ativas pixel a pixel (simulação raster) com destaque da cor selecionada quando há uma seleção única
+        if (!previewData) return;
+        previewCtx.clearRect(0, 0, PrevCanv.width, PrevCanv.height);
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width  = previewData.width;
+        offCanvas.height = previewData.height;
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.putImageData(previewData, 0, 0);
+        if (modoPreview === 'original') {previewCtx.drawImage(offCanvas, 0, 0, PrevCanv.width, PrevCanv.height);
+        } else {
+            /* Aplica remapeamentos pixel a pixel para simular o resultado */
+            const imgData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+            const data    = imgData.data;
+
+            /* Monta mapa source → { target, tol } para lookup O(n regras) por pixel */
+            const remapMap = {};
+            remaps.filter(r => r.active).forEach(r => { remapMap[r.source] = { target: r.target, tol: r.tolerance }; });
+
+            /* Cor selecionada para destaque (apenas com 1 cor selecionada) */
+            const highlightHex = SlctColr.size === 1 ? paleta.find(c => SlctColr.has(c.id))?.hex : null;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const [pr, pg, pb] = [data[i], data[i + 1], data[i + 2]];
+                let mapped = null;
+                for (const [src, rule] of Object.entries(remapMap)) {
+                    const [sr, sg, sb] = hexToRgb(src);
+                    if (colorDist([pr, pg, pb], [sr, sg, sb]) / 255 <= rule.tol) { mapped = hexToRgb(rule.target); break;}
+                }
+                if (mapped) {data[i] = mapped[0]; data[i + 1] = mapped[1]; data[i + 2] = mapped[2];}
+                /* Escurece pixels que não são da cor selecionada (destaque) */
+                if (highlightHex) {
+                    const [hr, hg, hb] = hexToRgb(highlightHex);
+                    if (colorDist([data[i], data[i+1], data[i+2]], [hr, hg, hb]) / 255 > 0.1) {
+                        const gray = Math.round((data[i] + data[i+1] + data[i+2]) / 3 * 0.3);
+                        data[i] = data[i + 1] = data[i + 2] = gray;
+                    }
+                }
+            }
+            const temp = document.createElement('canvas');
+            temp.width  = offCanvas.width;
+            temp.height = offCanvas.height;
+            temp.getContext('2d').putImageData(imgData, 0, 0);
+            previewCtx.drawImage(temp, 0, 0, PrevCanv.width, PrevCanv.height);
+        }
+        PrevCanv.style.transform = `scale(${zoom})`;
+    }
+    // ── Ações de edição de paleta ─────────────────────────────────────────────────
+    function mergeSelected() { // Mescla as cores selecionadas em uma cor média ponderada por pixels. Cria regras de remapeamento de cada cor original para a cor mesclada.
+        if (SlctColr.size < 2) return;
+        const cores = paleta.filter(c => SlctColr.has(c.id));
+        if (cores.some(c => c.locked)) { alert('Não é possível mesclar cores bloqueadas.'); return; }
+
+        const totalPx = cores.reduce((s, c) => s + c.pixels, 0);
+        const avgR = Math.round(cores.reduce((s, c) => s + c.rgb[0] * c.pixels, 0) / totalPx);
+        const avgG = Math.round(cores.reduce((s, c) => s + c.rgb[1] * c.pixels, 0) / totalPx);
+        const avgB = Math.round(cores.reduce((s, c) => s + c.rgb[2] * c.pixels, 0) / totalPx);
+        const mergedHex = rgbToHex(avgR, avgG, avgB);
+
+        pushHistory();
+        cores.forEach(c => remaps.push({ source: c.hex, target: mergedHex, tolerance: 0.02, active: true }));
+
+        const idx  = paleta.findIndex(c => SlctColr.has(c.id));
+        const rest = paleta.filter(c => !SlctColr.has(c.id));
+        rest.splice(Math.max(idx, 0), 0, {
+            id: crypto.randomUUID(), hex: mergedHex, rgb: [avgR, avgG, avgB],
+            pixels: totalPx,
+            percentage: totalPx / paleta.reduce((s, c) => s + c.pixels, 0) * 100,
+            locked: false
+        });
+
+        paleta         = rest;
+        SlctColr = new Set([rest[Math.max(idx, 0)]?.id]);
+        refreshAll();
+    }
+    function lockSelected() { // Alterna o estado locked das cores selecionadas (toggle).
+        if (SlctColr.size === 0) return;
+        const cores     = paleta.filter(c => SlctColr.has(c.id));
+        const allLocked = cores.every(c => c.locked);
+        cores.forEach(c => c.locked = !allLocked);
+        refreshAll()
+    }
+    function groupSimilar() { // Agrupa automaticamente cores visualmente semelhantes (distância < threshold). Cada grupo é mesclado em uma cor média ponderada por pixels.
+        const threshold = 0.05;
+        const groups    = [];
+        const visited   = new Set();
+        paleta.forEach((c, i) => {
+            if (visited.has(i)) return;
+            const group = [c];
+            visited.add(i);
+            for (let j = i + 1; j < paleta.length; j++) {
+                if (visited.has(j)) continue;
+                if (colorDist(c.rgb, paleta[j].rgb) / 255 < threshold) { group.push(paleta[j]); visited.add(j); } }
+            groups.push(group);
+        });
+        if (groups.every(g => g.length === 1)) { alert('Nenhuma cor semelhante encontrada.'); return; }
+        pushHistory();
+        const newPaleta   = [];
+        const totalOrigPx = paleta.reduce((s, c) => s + c.pixels, 0);
+        groups.forEach(g => {
+            if (g.length === 1) { newPaleta.push(g[0]); return; }
+            const totalPx = g.reduce((s, c) => s + c.pixels, 0);
+            const avgR = Math.round(g.reduce((s, c) => s + c.rgb[0] * c.pixels, 0) / totalPx);
+            const avgG = Math.round(g.reduce((s, c) => s + c.rgb[1] * c.pixels, 0) / totalPx);
+            const avgB = Math.round(g.reduce((s, c) => s + c.rgb[2] * c.pixels, 0) / totalPx);
+            const mergedHex = rgbToHex(avgR, avgG, avgB);
+            g.forEach(c => remaps.push({ source: c.hex, target: mergedHex, tolerance: 0.02, active: true }));
+            newPaleta.push({
+                id: crypto.randomUUID(), hex: mergedHex, rgb: [avgR,avgG,avgB],
+                pixels: totalPx,
+                percentage: (totalPx / totalOrigPx) * 100,
+                locked: false
+            });
+        });
+        paleta = newPaleta;
+        SlctColr.clear();
+        refreshAll();
+    }
+    function clearSelection() {SlctColr.clear(); renderPaleta(); renderPreview()} // Limpa a seleção atual sem alterar a paleta.
+    // Atualiza o estado disabled dos botões da Toolbar conforme a seleção atual.
+    function updateToolbarButtons() {const n = SlctColr.size ; $('#btnMerge' ).disabled = n < 2 ; $('#btnLock'  ).disabled = n < 1}
+    let toleranceTimer // Debounce do slider de tolerância: atualiza o preview em tempo real, sem gravar no histórico a cada movimento do slider. O histórico só é gravado ao soltar o slider (evento 'change').
+    function updateToleranceDebounced(i, val) { clearTimeout(toleranceTimer); toleranceTimer = setTimeout(() => { remaps[i].tolerance = val; renderPreview(); }, 100)}
+    // Grava a tolerância final no histórico ao soltar o slider.
+    function updateToleranceFinal(i, val) {remaps[i].tolerance = val; pushHistory();}
+    function toggleRule(i) { remaps[i].active = !remaps[i].active; pushHistory(); }
+    function removeRule(i) { remaps.splice(i, 1); pushHistory(); }
+    // ── Refresh global ────────────────────────────────────────────────────────────
+    function refreshAll() { // Re-renderiza todo o editor. Protegido por refreshGuard para evitar re-entrância caso alguma função de render dispare eventos que chamem refreshAll() novamente.
+        if (refreshGuard) return; refreshGuard = true;
+        try {renderPaleta();renderStats();renderPreview();updateToolbarButtons();updateUndoRedoButtons()}finally{refreshGuard=false}
+    }
+    function createDownloadLink(blob,fileName='result.svg'){ // Atualiza o botão de download com o blob recebido do backend.
+        if (CurrBlod) URL.revokeObjectURL(CurrBlod)  // Libera memória da URL anterior antes de criar nova
+        CurrBlod = URL.createObjectURL(blob)
+        const btn      = $('#btnDownload')
+        btn.href       = CurrBlod
+        btn.download   = fileName
+        const ext      = fileName.split('.').pop().toUpperCase()
+        btn.textContent = `⬇️ Baixar ${ext}`
+        $('#resultSection').style.display = 'block'
+    }
+    function setImagemOriginal(img) { // Define a imagem original e extrai a paleta inicial. Reseta histórico e seleção ao trocar de imagem.
+        ImgOrgn = img;
+        createPreviewImage();
+        paleta = extractPalette(img, maxColors);
+        remaps = [];
+        Hist      = [];
+        HistIdx = -1;
+        SlctColr.clear();
+        pushHistory();
+        refreshAll();
+    }
+    function getPaletteString(){return buildPaletteString(paleta,remaps)} // Retorna a string de paleta formatada para envio à API
+    function getMaxColors()    {return maxColors} // Retorna o número máximo de cores atual
+    function zoomIn()    { zoom = Math.min(zoom + 0.25, CONFIG.MAX_PREVIEW_ZOOM);renderPreview()}
+    function zoomOut()   { zoom = Math.max(zoom - 0.25, CONFIG.MIN_PREVIEW_ZOOM);renderPreview()}
+    function zoomReset() { zoom = 1; renderPreview()}
+    function setModoPreview(modo){modoPreview = modo ; renderPreview()}
+</script>
+
+<script> // App.js
+    // ── Inicialização ─────────────────────────────────────────────────────────────
+    function initEditor() {updateUndoRedoButtons()} // Inicializa o editor: renderiza presets e atualiza botões Undo/Redo.
+    initEditor()
+
+    // ── Upload de imagem ──────────────────────────────────────────────────────
+    const Dropp     = $('#dropArea')
+    const IptIMG    = $('#inputImagem')
+    const BtnVetor  = $('#btnVetorizar')
+    const workspace = $('#workspace')
+
+    // Clique na drop zone abre o seletor de arquivo
+    Dropp.addEventListener('click'    ,_=>IptIMG.click())
+    Dropp.addEventListener('dragover' ,e=>{e.preventDefault();Dropp.classList.add('dragover')})
+    Dropp.addEventListener('dragleave',_=>Dropp.classList.remove('dragover'))
+    Dropp.addEventListener('drop'     ,e=>{e.preventDefault();Dropp.classList.remove('dragover');const f = e.dataTransfer.files[0];if (f) selecionarArquivo(f)})
+    IptIMG.addEventListener('change'  ,e=>{const f = e.target.files[0];if (f) selecionarArquivo(f)})
+
+    function selecionarArquivo(file) { // Valida e registra o arquivo selecionado, Aceita apenas JPG e PNG (validação no cliente como UX, não como segurança).
+        if (!file.type.match(/image\/(jpeg|png)/)) {alert('Formato não suportado. Envie uma imagem JPG ou PNG.');return}
+        arquivoSelecionado = file
+        Dropp.classList.add('file-selected')
+        Dropp.innerHTML = `<div class="file-info"><span>📄</span><div><strong>${file.name}</strong><br>${(file.size / 1024).toFixed(1)} KB</div></div>`
+        BtnVetor.disabled = false
+        $('#status').textContent  = ''
+        None(workspace) ; None($('#resultSection'))
+    }
+
+    // ── Vetorização ───────────────────────────────────────────────────────────
+        async function VVetorizar(Btn){
+            if (!arquivoSelecionado) return
+            Btn.disabled = true
+            setStatus('Extraindo paleta e vetorizando...','loading')
+            try { // Carrega a imagem em memória antes de chamar a API, para que o paletteEditor possa fazer o preview local imediatamente.
+                const img = await loadImage(arquivoSelecionado)
+                setImagemOriginal(img)
+                const result = await vectorize(arquivoSelecionado, getMaxColors())
+                setImageToken(result.imageToken)
+                createDownloadLink(result.fileBlob, result.fileName)
+                setStatus('✅ Vetorizado! Agora edite a paleta.', 'success')
+                Show(workspace)
+                groupSimilar()
+            } catch (e) {setStatus('❌ Erro: '+e.message,'error')
+            } finally {Btn.disabled = false}
+        }
+
+        async function ReVetor(){
+            const token = getImageToken()
+            if (!token) {alert('Vetorize uma imagem Primeiro');return}
+            setStatus('Re-vetorizando com paleta atual...','loading')
+            try {const result = await revectorize(token,getPaletteString(),DwldOpt)
+                createDownloadLink(result.fileBlob,result.fileName)
+                setStatus('✅ Re-vetorizado com sucesso!','success')
+            }catch(e){setStatus('❌ Erro: '+e.message,'error')}
+        }
+
+    // ── Modo preview ──────────────────────────────────────────────────────────
+        $$('.mode-tab').forEach(tab=>{tab.addEventListener('click',()=>{$$('.mode-tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');setModoPreview(tab.dataset.mode)})})
+
+</script>
+
+</html> <!--1202-->
