@@ -68,21 +68,21 @@ const addOutput=(fd,o={})=>{
 // }
 
 async function execute(fd){
+    const headers = fd.getHeaders()
+    console.log("HEADERS:", fd.getHeaders())
     const r = await fetch(API + '/vectorize', {
         method: 'POST',
         headers: {
             Authorization: AUTH,
-            ...fd.getHeaders()
+            ...headers
         },
         body: fd
     })
 
     const buffer = Buffer.from(await r.arrayBuffer())
-
     const text = buffer.toString()
 
     if(!r.ok){
-        console.log("VECTORIZER ERROR:", text)
         throw new Error(text)
     }
 
@@ -104,10 +104,6 @@ app.post('/api/vectorizer/vectorize',upload.single('image'),async(req,res)=>{
         fd.append('output.file_format','svg')
         fd.append('policy.retention_days',process.env.VECTORIZER_RETENTION_DAYS||'1')
         fd.append('processing.max_colors',clampMaxColors(req.body.maxColors))
-        
-        console.log("FILE SIZE:", req.file.size)
-        console.log("FILE EXISTS:", !!req.file)
-
         const r=await execute(fd)
         res.set('Content-Type',r.contentType)
            .set('X-Image-Token',r.imageToken||'')
