@@ -86,7 +86,7 @@ async function execute(fd){
 app.post('/api/vectorizer/vectorize',upload.single('image'),async(req,res)=>{
     try{if(!req.file) return res.status(400).send('Imagem não enviada.')
         const fd=new FormData()
-        fd.append('image', req.file.buffer, {filename: req.file.originalname,contentType: req.file.mimetype})
+        fd.append('image',new File([req.file.buffer], req.file.originalname, {type: req.file.mimetype}))
         fd.append('mode',process.env.VECTORIZER_MODE||'test') // production
         fd.append('output.file_format','svg')
         fd.append('policy.retention_days',process.env.VECTORIZER_RETENTION_DAYS||'1')
