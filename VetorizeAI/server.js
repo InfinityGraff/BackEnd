@@ -4,10 +4,10 @@ const multer=require('multer')
 const app=express()
 const upload=multer({storage:multer.memoryStorage()})
 app.use(express.json())
-app.use(express.static('public'))
 const cors = require("cors")
 app.use(cors({origin: "*"}))
 const FormData = require("form-data")
+app.get('/',(req,res)=>res.json({status:'online'}))
 
 const API=process.env.VECTORIZER_API_URL||'https://vectorizer.ai/api/v1'
 const AUTH='Basic '+Buffer.from(`${process.env.VECTORIZER_API_ID}:${process.env.VECTORIZER_API_SECRET}`).toString('base64')
@@ -97,4 +97,5 @@ app.post('/api/vectorizer/revectorize',async(req,res)=>{
 })
 const PORT=process.env.PORT||8080
 
-app.listen(PORT,()=>console.log(`Servidor: http://localhost:${PORT}`))
+app.listen(PORT,()=>console.log(`Servidor iniciado na porta ${PORT}`))
+
