@@ -58,12 +58,14 @@ const addOutput=(fd,o={})=>{
     add(fd,'output.bitmap.anti_aliasing_mode',o.bitmapAntiAliasingMode)
 }
 async function execute(fd){
-    const r=await fetch(API+'/vectorize',{method:'POST',headers:{Authorization:AUTH,...headers},body:fd})
-    const buf=Buffer.from(await r.arrayBuffer())
-    if(!r.ok) throw new Error(buf.toString()||`Vectorizer.ai HTTP ${r.status}`)
-    const type=(r.headers.get('content-type')||'image/svg+xml').split(';')[0].trim()
-    return{file:buf,contentType:type,fileName:fileName(type),imageToken:r.headers.get('x-image-token')}
+    const headers = fd.getHeaders ? fd.getHeaders() : {}
+    const r = await fetch(API + '/vectorize', {method: 'POST',headers: {Authorization: AUTH,...headers},body: fd})
+    const buffer = Buffer.from(await r.arrayBuffer())
+    if(!r.ok){throw new Error(buffer.toString())}
+    const type = (r.headers.get('content-type') || 'image/svg+xml').split(';')[0]
+    return {file: buffer,contentType: type,fileName: fileName(type),imageToken: r.headers.get('x-image-token')}
 }
+
 app.post('/api/vectorizer/vectorize',upload.single('image'),async(req,res)=>{
     try{if(!req.file) return res.status(400).send('Imagem não enviada.')
         const fd=new FormData()
