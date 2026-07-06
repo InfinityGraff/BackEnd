@@ -57,37 +57,18 @@ const addOutput=(fd,o={})=>{
 }
 
 async function execute(fd){
-    const r = await fetch(`${API}/vectorize`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Basic ${Buffer.from(`${process.env.VECTORIZER_API_ID}:${process.env.VECTORIZER_API_SECRET}`).toString("base64")}`
-        },
-        body: fd
-    })
-
+    const r = await fetch(`${API}/vectorize`, {method: 'POST',headers: {Authorization: `Basic ${Buffer.from(`${process.env.VECTORIZER_API_ID}:${process.env.VECTORIZER_API_SECRET}`).toString("base64")}`},body: fd})
     const buffer = Buffer.from(await r.arrayBuffer())
-
-    if(!r.ok){
-        console.log("STATUS:", r.status)
-        console.log("BODY:", buffer.toString())
-        throw new Error(buffer.toString())
-    }
-
+    if(!r.ok){throw new Error(buffer.toString())}
     const type = (r.headers.get('content-type') || 'image/svg+xml').split(';')[0]
-
-    return {
-        file: buffer,
-        contentType: type,
-        fileName: fileName(type),
-        imageToken: r.headers.get('x-image-token')
-    }
+    return {file: buffer,contentType: type,fileName: fileName(type),imageToken: r.headers.get('x-image-token')}
 }
 
 app.post('/api/vectorizer/vectorize',upload.single('image'),async(req,res)=>{
     try{if(!req.file) return res.status(400).send('Imagem não enviada.')
         const fd=new FormData()
         fd.append('image',new File([req.file.buffer], req.file.originalname, {type: req.file.mimetype}))
-        fd.append('mode',process.env.VECTORIZER_MODE||'test') // production
+        fd.append('mode','test') // production
         fd.append('output.file_format','svg')
         fd.append('policy.retention_days',process.env.VECTORIZER_RETENTION_DAYS||'1')
         fd.append('processing.max_colors',clampMaxColors(req.body.maxColors))
@@ -104,7 +85,7 @@ app.post('/api/vectorizer/revectorize',async(req,res)=>{
         if((process.env.VECTORIZER_RETENTION_DAYS||'1')==='0') return res.status(400).send('Re-vetorização indisponível: retention_days=0.')
         const fd=new FormData()
         fd.append('image.token',imageToken)
-        fd.append('mode',process.env.VECTORIZER_MODE||'production')
+        fd.append('mode','test') // production
         if(palette) fd.append('processing.palette',palette)
         addOutput(fd,options)
         const r=await execute(fd)
