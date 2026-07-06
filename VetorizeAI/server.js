@@ -6,7 +6,7 @@ const upload=multer({storage:multer.memoryStorage()})
 app.use(express.json())
 const cors = require("cors")
 app.use(cors({origin: "*"}))
-const FormData = require("form-data")
+const { FormData, Blob } = require("undici")
 app.get('/',(req,res)=>res.json({status:'online'}))
 
 const API=process.env.VECTORIZER_API_URL||'https://vectorizer.ai/api/v1'
@@ -58,35 +58,27 @@ const addOutput=(fd,o={})=>{
     add(fd,'output.bitmap.anti_aliasing_mode',o.bitmapAntiAliasingMode)
 }
 
-// async function execute(fd){
-//     const headers = fd.getHeaders ? fd.getHeaders() : {}
-//     const r = await fetch(API + '/vectorize', {method: 'POST',headers: {Authorization: AUTH,...headers},body: fd})
-//     const buffer = Buffer.from(await r.arrayBuffer())
-//     if(!r.ok){throw new Error(buffer.toString())}
-//     const type = (r.headers.get('content-type') || 'image/svg+xml').split(';')[0]
-//     return {file: buffer,contentType: type,fileName: fileName(type),imageToken: r.headers.get('x-image-token')}
-// }
-
 async function execute(fd){
-    const headers = fd.getHeaders()
-    console.log("HEADERS:", fd.getHeaders())
     const r = await fetch(API + '/vectorize', {
         method: 'POST',
         headers: {
-            Authorization: AUTH,
-            ...headers
+            Authorization: AUTH
         },
         body: fd
     })
 
     const buffer = Buffer.from(await r.arrayBuffer())
-    const text = buffer.toString()
 
     if(!r.ok){
-        throw new Error(text)
+        throw new Error(buffer.toString())
     }
 
-    const type = (r.headers.get('content-type') || 'image/svg+xml').split(';')[0].trim()
+    if(!r.ok){
+        console.log("STATUS:", r.status)
+        console.log("BODY:", buffer.toString())
+    }
+
+    const type = (r.headers.get('content-type') || 'image/svg+xml').split(';')[0]
 
     return {
         file: buffer,
@@ -99,14 +91,9 @@ async function execute(fd){
 app.post('/api/vectorizer/vectorize',upload.single('image'),async(req,res)=>{
     try{if(!req.file) return res.status(400).send('Imagem não enviada.')
         const fd=new FormData()
-
         const { Readable } = require('stream')
         const stream = Readable.from(req.file.buffer)
-        fd.append('image', stream, {
-            filename: req.file.originalname,
-            contentType: req.file.mimetype
-        })
-
+        fd.append('image', stream, {filename: req.file.originalname,contentType: req.file.mimetype})
         fd.append('mode',process.env.VECTORIZER_MODE||'test') // production
         fd.append('output.file_format','svg')
         fd.append('policy.retention_days',process.env.VECTORIZER_RETENTION_DAYS||'1')
