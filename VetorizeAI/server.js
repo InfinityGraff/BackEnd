@@ -6,11 +6,9 @@ const upload=multer({storage:multer.memoryStorage()})
 app.use(express.json())
 const cors = require("cors")
 app.use(cors({origin: "*"}))
-const { FormData, Blob } = require("undici")
 app.get('/',(req,res)=>res.json({status:'online'}))
 
 const API=process.env.VECTORIZER_API_URL||'https://vectorizer.ai/api/v1'
-const AUTH='Basic '+Buffer.from(`${process.env.VECTORIZER_API_ID}:${process.env.VECTORIZER_API_SECRET}`).toString('base64')
 const clampMaxColors=n=>{n=Number(n??32) ; if(n<0)return 0 ; if(n===1)return 2 ; if(n>256)return 256 ; return n}
 const add=(fd,k,v)=>v!=null&&fd.append(k,String(v))
 
@@ -59,10 +57,10 @@ const addOutput=(fd,o={})=>{
 }
 
 async function execute(fd){
-    const r = await fetch(API + '/vectorize', {
+    const r = await fetch(`${API}/vectorize`, {
         method: 'POST',
         headers: {
-            Authorization: AUTH
+            Authorization: `Basic ${Buffer.from(`${process.env.VECTORIZER_API_ID}:${process.env.VECTORIZER_API_SECRET}`).toString("base64")}`
         },
         body: fd
     })
@@ -70,12 +68,9 @@ async function execute(fd){
     const buffer = Buffer.from(await r.arrayBuffer())
 
     if(!r.ok){
-        throw new Error(buffer.toString())
-    }
-
-    if(!r.ok){
         console.log("STATUS:", r.status)
         console.log("BODY:", buffer.toString())
+        throw new Error(buffer.toString())
     }
 
     const type = (r.headers.get('content-type') || 'image/svg+xml').split(';')[0]
@@ -91,9 +86,7 @@ async function execute(fd){
 app.post('/api/vectorizer/vectorize',upload.single('image'),async(req,res)=>{
     try{if(!req.file) return res.status(400).send('Imagem não enviada.')
         const fd=new FormData()
-        const { Readable } = require('stream')
-        const stream = Readable.from(req.file.buffer)
-        fd.append('image', stream, {filename: req.file.originalname,contentType: req.file.mimetype})
+        fd.append('image', req.file.buffer, {filename: req.file.originalname,contentType: req.file.mimetype})
         fd.append('mode',process.env.VECTORIZER_MODE||'test') // production
         fd.append('output.file_format','svg')
         fd.append('policy.retention_days',process.env.VECTORIZER_RETENTION_DAYS||'1')
@@ -124,4 +117,3 @@ app.post('/api/vectorizer/revectorize',async(req,res)=>{
 const PORT=process.env.PORT||8080
 
 app.listen(PORT,()=>console.log(`Servidor iniciado na porta ${PORT}`))
-
