@@ -58,7 +58,7 @@ const addOutput=(fd,o={})=>{
     add(fd,'output.bitmap.anti_aliasing_mode',o.bitmapAntiAliasingMode)
 }
 async function execute(fd){
-    const r=await fetch(API+'/vectorize',{method:'POST',headers:{Authorization:AUTH},body:fd})
+    const r=await fetch(API+'/vectorize',{method:'POST',headers:{Authorization:AUTH,...fd.getHeaders()},body:fd})
     const buf=Buffer.from(await r.arrayBuffer())
     if(!r.ok) throw new Error(buf.toString()||`Vectorizer.ai HTTP ${r.status}`)
     const type=(r.headers.get('content-type')||'image/svg+xml').split(';')[0].trim()
